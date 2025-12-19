@@ -1313,6 +1313,13 @@ CRITICAL RULES:
                 <p><strong>OpenAI:</strong> <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI Platform</a></p>
                 <p><strong>Claude:</strong> <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Anthropic Console</a></p>
               </div>
+              
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-[10px] text-amber-900 leading-relaxed">
+                  <strong className="font-semibold">⚠️ 免責事項：</strong>
+                  APIキーはブラウザのローカルストレージに暗号化して保存されますが、XSS攻撃などのセキュリティリスクから完全に保護されるものではありません。APIキーの漏洩や不正使用による損害について、本アプリケーションの開発者は一切の責任を負いません。自己責任でご使用ください。
+                </p>
+              </div>
             </div>
           </div>
         </div>
