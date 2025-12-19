@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User } from 'lucide-react';
 import logoImage from '/logo.png';
-import { setEncryptedItem, getEncryptedItem } from './crypto';
+import { setEncryptedItem, getEncryptedItem, setEncryptedSessionItem, getEncryptedSessionItem } from './crypto';
 import { sanitizeAIOutputWithCodeProtection, detectDangerousPatterns } from './sanitizer';
 
 // --- LLM Provider Configuration ---
@@ -40,6 +40,12 @@ const App = () => {
     gemini: '',
     openai: '',
     claude: ''
+  });
+  
+  // APIキーを永続保存するかどうか（falseの場合はsessionStorage）
+  const [saveToLocalStorage, setSaveToLocalStorage] = useState(() => {
+    // localStorageに保存されている場合はtrue
+    return localStorage.getItem('api_keys_persist') === 'true';
   });
   
   // User Settings
@@ -100,11 +106,23 @@ const App = () => {
   useEffect(() => {
     const loadApiKeys = async () => {
       try {
-        const [gemini, openai, claude] = await Promise.all([
+        // localStorageとsessionStorageの両方から読み込む（sessionStorage優先）
+        const [geminiLocal, openaiLocal, claudeLocal] = await Promise.all([
           getEncryptedItem('gemini_api_key'),
           getEncryptedItem('openai_api_key'),
           getEncryptedItem('claude_api_key')
         ]);
+        
+        const [geminiSession, openaiSession, claudeSession] = await Promise.all([
+          getEncryptedSessionItem('gemini_api_key'),
+          getEncryptedSessionItem('openai_api_key'),
+          getEncryptedSessionItem('claude_api_key')
+        ]);
+        
+        // sessionStorageにあればそちら優先
+        const gemini = geminiSession || geminiLocal;
+        const openai = openaiSession || openaiLocal;
+        const claude = claudeSession || claudeLocal;
         
         setApiKeys({ gemini, openai, claude });
         
@@ -135,12 +153,31 @@ const App = () => {
   // Save API Keys (with encryption)
   const handleSaveApiKeys = async (keys: { gemini: string; openai: string; claude: string }) => {
     try {
-      // 暗号化して保存
-      await Promise.all([
-        setEncryptedItem('gemini_api_key', keys.gemini),
-        setEncryptedItem('openai_api_key', keys.openai),
-        setEncryptedItem('claude_api_key', keys.claude)
-      ]);
+      if (saveToLocalStorage) {
+        // localStorageに永続保存
+        await Promise.all([
+          setEncryptedItem('gemini_api_key', keys.gemini),
+          setEncryptedItem('openai_api_key', keys.openai),
+          setEncryptedItem('claude_api_key', keys.claude)
+        ]);
+        // sessionStorageをクリア
+        sessionStorage.removeItem('gemini_api_key');
+        sessionStorage.removeItem('openai_api_key');
+        sessionStorage.removeItem('claude_api_key');
+        localStorage.setItem('api_keys_persist', 'true');
+      } else {
+        // sessionStorageに一時保存（タブを閉じると消える）
+        await Promise.all([
+          setEncryptedSessionItem('gemini_api_key', keys.gemini),
+          setEncryptedSessionItem('openai_api_key', keys.openai),
+          setEncryptedSessionItem('claude_api_key', keys.claude)
+        ]);
+        // localStorageをクリア
+        localStorage.removeItem('gemini_api_key');
+        localStorage.removeItem('openai_api_key');
+        localStorage.removeItem('claude_api_key');
+        localStorage.setItem('api_keys_persist', 'false');
+      }
       
       setApiKeys(keys);
       setIsSettingsOpen(false);
@@ -1245,7 +1282,7 @@ CRITICAL RULES:
               API設定
             </h2>
             <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-              使用するLLMプロバイダーのAPIキーを入力してください。キーはブラウザのローカルストレージに保存されます。
+              使用するLLMプロバイダーのAPIキーを入力してください。保存方法を選択できます。
             </p>
             
             <div className="space-y-4">
@@ -1289,6 +1326,30 @@ CRITICAL RULES:
                   value={apiKeys.claude}
                   onChange={(e) => setApiKeys({ ...apiKeys, claude: e.target.value })}
                 />
+              </div>
+              
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">
+                    入力内容を次回以降も保存する
+                  </span>
+                  <label htmlFor="saveToLocalStorage" className="relative inline-block w-11 h-6 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      id="saveToLocalStorage"
+                      checked={saveToLocalStorage}
+                      onChange={(e) => setSaveToLocalStorage(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <span className="absolute inset-0 bg-gray-300 rounded-full peer-checked:bg-blue-600 transition-colors"></span>
+                    <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  {saveToLocalStorage 
+                    ? 'APIキーはローカルストレージに保存され、次回以降も保持されます。'
+                    : 'APIキーはセッションストレージに保存され、タブを閉じると自動的に削除されます。'}
+                </p>
               </div>
               
               <div className="flex justify-end gap-2 pt-3">

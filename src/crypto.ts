@@ -125,3 +125,23 @@ export async function getEncryptedItem(key: string): Promise<string> {
   if (!encrypted) return "";
   return await decryptValue(encrypted);
 }
+
+/**
+ * SessionStorageに暗号化して保存（タブを閉じると消える）
+ */
+export async function setEncryptedSessionItem(
+  key: string,
+  value: string
+): Promise<void> {
+  const encrypted = await encryptValue(value);
+  sessionStorage.setItem(key, encrypted);
+}
+
+/**
+ * SessionStorageから復号化して取得
+ */
+export async function getEncryptedSessionItem(key: string): Promise<string> {
+  const encrypted = sessionStorage.getItem(key);
+  if (!encrypted) return "";
+  return await decryptValue(encrypted);
+}
