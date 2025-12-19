@@ -7,8 +7,7 @@
  */
 
 const CRYPTO_ALGORITHM = "AES-GCM";
-const KEY_LENGTH = 256;
-const IV_LENGTH = 12; // 96 bits for GCM
+const IV_LENGTH = 12; // 96 bits for GCM (AES-256)
 
 /**
  * ブラウザフィンガープリントベースの派生キーを生成

@@ -66,7 +66,6 @@ const App = () => {
     return defaultSettings;
   });
   
-  const hasAnyApiKey = apiKeys.gemini || apiKeys.openai || apiKeys.claude;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   
