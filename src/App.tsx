@@ -25,6 +25,10 @@ const App = () => {
   const [leftText, setLeftText] = useState(""); // Japanese (usually)
   const [rightText, setRightText] = useState(""); // English (usually)
   
+  // Previous text states for diff detection
+  const [prevLeftText, setPrevLeftText] = useState("");
+  const [prevRightText, setPrevRightText] = useState("");
+  
   // Token Counts
   const [leftTokenCount, setLeftTokenCount] = useState(0);
   const [rightTokenCount, setRightTokenCount] = useState(0);
@@ -113,6 +117,39 @@ const App = () => {
     }
     
     return true;
+  };
+
+  // Find differences between two texts (simple line-based diff)
+  const findDifferences = (oldText: string, newText: string): { start: number; end: number; changedText: string } | null => {
+    if (oldText === newText) return null;
+    
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    
+    // Find first different line
+    let startLine = 0;
+    while (startLine < Math.min(oldLines.length, newLines.length) && 
+           oldLines[startLine] === newLines[startLine]) {
+      startLine++;
+    }
+    
+    // Find last different line
+    let endLineOld = oldLines.length - 1;
+    let endLineNew = newLines.length - 1;
+    while (endLineOld >= startLine && endLineNew >= startLine && 
+           oldLines[endLineOld] === newLines[endLineNew]) {
+      endLineOld--;
+      endLineNew--;
+    }
+    
+    // Extract changed portion
+    const changedText = newLines.slice(startLine, endLineNew + 1).join('\n');
+    
+    return {
+      start: startLine,
+      end: endLineNew,
+      changedText
+    };
   };
 
   // Translation Function
@@ -205,12 +242,44 @@ const App = () => {
 
     if (lastEdited === 'left' && debouncedLeft) {
       const performTranslation = async () => {
-        const translated = await translateText(debouncedLeft, "Japanese", "English");
-        if (translated !== null) {
-          setRightText(translated);
-          // Save to history after translation completes
-          const tokens = await fetchTokenCount(translated);
-          saveToHistory(debouncedLeft, translated, leftTokenCount, tokens);
+        // Check if this is the first translation or a diff update
+        const diff = findDifferences(prevLeftText, debouncedLeft);
+        
+        if (!prevLeftText || !diff) {
+          // First translation or no meaningful diff - translate everything
+          const translated = await translateText(debouncedLeft, "Japanese", "English");
+          if (translated !== null) {
+            setRightText(translated);
+            setPrevLeftText(debouncedLeft);
+            setPrevRightText(translated);
+            // Save to history after translation completes
+            const tokens = await fetchTokenCount(translated);
+            saveToHistory(debouncedLeft, translated, leftTokenCount, tokens);
+          }
+        } else {
+          // Translate only the changed portion
+          const translatedDiff = await translateText(diff.changedText, "Japanese", "English");
+          if (translatedDiff !== null) {
+            // Merge the translated diff back into the right text
+            const rightLines = prevRightText.split('\n');
+            const translatedLines = translatedDiff.split('\n');
+            
+            // Replace the changed lines
+            const newRightLines = [
+              ...rightLines.slice(0, diff.start),
+              ...translatedLines,
+              ...rightLines.slice(diff.end + 1)
+            ];
+            
+            const newRightText = newRightLines.join('\n');
+            setRightText(newRightText);
+            setPrevLeftText(debouncedLeft);
+            setPrevRightText(newRightText);
+            
+            // Save to history
+            const tokens = await fetchTokenCount(newRightText);
+            saveToHistory(debouncedLeft, newRightText, leftTokenCount, tokens);
+          }
         }
       };
       performTranslation();
@@ -227,12 +296,44 @@ const App = () => {
 
     if (lastEdited === 'right' && debouncedRight) {
       const performTranslation = async () => {
-        const translated = await translateText(debouncedRight, "English", "Japanese");
-        if (translated !== null) {
-          setLeftText(translated);
-          // Save to history after translation completes
-          const tokens = await fetchTokenCount(translated);
-          saveToHistory(translated, debouncedRight, tokens, rightTokenCount);
+        // Check if this is the first translation or a diff update
+        const diff = findDifferences(prevRightText, debouncedRight);
+        
+        if (!prevRightText || !diff) {
+          // First translation or no meaningful diff - translate everything
+          const translated = await translateText(debouncedRight, "English", "Japanese");
+          if (translated !== null) {
+            setLeftText(translated);
+            setPrevRightText(debouncedRight);
+            setPrevLeftText(translated);
+            // Save to history after translation completes
+            const tokens = await fetchTokenCount(translated);
+            saveToHistory(translated, debouncedRight, tokens, rightTokenCount);
+          }
+        } else {
+          // Translate only the changed portion
+          const translatedDiff = await translateText(diff.changedText, "English", "Japanese");
+          if (translatedDiff !== null) {
+            // Merge the translated diff back into the left text
+            const leftLines = prevLeftText.split('\n');
+            const translatedLines = translatedDiff.split('\n');
+            
+            // Replace the changed lines
+            const newLeftLines = [
+              ...leftLines.slice(0, diff.start),
+              ...translatedLines,
+              ...leftLines.slice(diff.end + 1)
+            ];
+            
+            const newLeftText = newLeftLines.join('\n');
+            setLeftText(newLeftText);
+            setPrevRightText(debouncedRight);
+            setPrevLeftText(newLeftText);
+            
+            // Save to history
+            const tokens = await fetchTokenCount(newLeftText);
+            saveToHistory(newLeftText, debouncedRight, tokens, rightTokenCount);
+          }
         }
       };
       performTranslation();
@@ -249,6 +350,8 @@ const App = () => {
       const state = history[newIndex];
       setLeftText(state.leftText);
       setRightText(state.rightText);
+      setPrevLeftText(state.leftText);
+      setPrevRightText(state.rightText);
       setLeftTokenCount(state.leftTokenCount);
       setRightTokenCount(state.rightTokenCount);
       setHistoryIndex(newIndex);
@@ -262,6 +365,8 @@ const App = () => {
       const state = history[newIndex];
       setLeftText(state.leftText);
       setRightText(state.rightText);
+      setPrevLeftText(state.leftText);
+      setPrevRightText(state.rightText);
       setLeftTokenCount(state.leftTokenCount);
       setRightTokenCount(state.rightTokenCount);
       setHistoryIndex(newIndex);
@@ -283,6 +388,8 @@ const App = () => {
   const handleClear = () => {
     setLeftText("");
     setRightText("");
+    setPrevLeftText("");
+    setPrevRightText("");
     setLeftTokenCount(0);
     setRightTokenCount(0);
     setLastEdited(null);
