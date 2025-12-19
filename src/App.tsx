@@ -77,6 +77,10 @@ const App = () => {
   const [prevLeftText, setPrevLeftText] = useState("");
   const [prevRightText, setPrevRightText] = useState("");
   
+  // Diff highlight states
+  const [leftHighlights, setLeftHighlights] = useState<{ start: number; end: number; type: 'added' | 'removed' }[]>([]);
+  const [rightHighlights, setRightHighlights] = useState<{ start: number; end: number; type: 'added' | 'removed' }[]>([]);
+  
   // Token Counts
   const [leftTokenCount, setLeftTokenCount] = useState(0);
   const [rightTokenCount, setRightTokenCount] = useState(0);
@@ -217,6 +221,91 @@ const App = () => {
     return true;
   };
 
+  // Apply highlights with animation
+  const applyHighlights = (
+    side: 'left' | 'right',
+    oldText: string,
+    newText: string,
+    duration = 500
+  ) => {
+    const highlights: { start: number; end: number; type: 'added' | 'removed' }[] = [];
+
+    // Calculate character positions for additions (green)
+    if (newText.length > oldText.length || newText !== oldText) {
+      // Find first difference
+      let startPos = 0;
+      while (startPos < Math.min(oldText.length, newText.length) && 
+             oldText[startPos] === newText[startPos]) {
+        startPos++;
+      }
+
+      // Find last difference from end
+      let endPosOld = oldText.length - 1;
+      let endPosNew = newText.length - 1;
+      while (endPosOld >= startPos && endPosNew >= startPos && 
+             oldText[endPosOld] === newText[endPosNew]) {
+        endPosOld--;
+        endPosNew--;
+      }
+
+      // Green highlight for added text
+      if (endPosNew >= startPos) {
+        highlights.push({
+          start: startPos,
+          end: endPosNew + 1,
+          type: 'added'
+        });
+      }
+    }
+
+    // Set highlights
+    if (side === 'left') {
+      setLeftHighlights(highlights);
+      setTimeout(() => setLeftHighlights([]), duration);
+    } else {
+      setRightHighlights(highlights);
+      setTimeout(() => setRightHighlights([]), duration);
+    }
+  };
+
+  // Apply red highlights for lines that will be deleted
+  const applyDeletionHighlights = (
+    side: 'left' | 'right',
+    text: string,
+    startLine: number,
+    endLine: number,
+    duration = 1000
+  ) => {
+    const lines = text.split('\n');
+    let charStart = 0;
+    
+    // Calculate character position of start line
+    for (let i = 0; i < startLine; i++) {
+      charStart += lines[i].length + 1; // +1 for newline
+    }
+    
+    // Calculate character position of end line
+    let charEnd = charStart;
+    for (let i = startLine; i <= endLine && i < lines.length; i++) {
+      charEnd += lines[i].length;
+      if (i < endLine) charEnd += 1; // +1 for newline
+    }
+    
+    const highlights = [{
+      start: charStart,
+      end: charEnd,
+      type: 'removed' as const
+    }];
+    
+    if (side === 'left') {
+      setLeftHighlights(highlights);
+      setTimeout(() => setLeftHighlights([]), duration);
+    } else {
+      setRightHighlights(highlights);
+      setTimeout(() => setRightHighlights([]), duration);
+    }
+  };
+
   // Find differences between two texts (simple line-based diff)
   const findDifferences = (oldText: string, newText: string): { start: number; end: number; changedText: string; oldEnd: number } | null => {
     if (oldText === newText) return null;
@@ -241,8 +330,10 @@ const App = () => {
     }
     
     // Extract changed portion (preserve all lines including empty ones)
+    // If lines were deleted, changedText might be empty
     const changedText = newLines.slice(startLine, endLineNew + 1).join('\n');
     
+    // Return diff even if changedText is empty (for deletion cases)
     return {
       start: startLine,
       end: endLineNew,
@@ -408,15 +499,16 @@ CRITICAL RULES:
     // Update token count independently of translation trigger
     fetchTokenCount(debouncedLeft).then(setLeftTokenCount);
 
-    if (lastEdited === 'left' && debouncedLeft && userSettings.autoTranslate) {
+    if (lastEdited === 'left' && userSettings.autoTranslate) {
       const performTranslation = async () => {
         // Check if this is the first translation or a diff update
         const diff = findDifferences(prevLeftText, debouncedLeft);
         
-        if (!prevLeftText || !diff) {
-          // First translation or no meaningful diff - translate everything
+        if (!prevLeftText) {
+          // First translation - translate everything
           const translated = await translateText(debouncedLeft, "Japanese", "English");
           if (translated !== undefined) {
+            applyHighlights('right', prevRightText, translated);
             setRightText(translated);
             setPrevLeftText(debouncedLeft);
             setPrevRightText(translated);
@@ -424,8 +516,8 @@ CRITICAL RULES:
             const tokens = await fetchTokenCount(translated);
             saveToHistory(debouncedLeft, translated, leftTokenCount, tokens);
           }
-        } else {
-          // Translate only the changed portion
+        } else if (diff && diff.changedText.trim() && debouncedLeft.length >= prevLeftText.length) {
+          // Translate only the changed portion (additions/modifications)
           const translatedDiff = await translateText(diff.changedText, "Japanese", "English");
           if (translatedDiff !== undefined) {
             // Merge the translated diff back into the right text
@@ -440,6 +532,7 @@ CRITICAL RULES:
             ];
             
             const newRightText = newRightLines.join('\n');
+            applyHighlights('right', prevRightText, newRightText);
             setRightText(newRightText);
             setPrevLeftText(debouncedLeft);
             setPrevRightText(newRightText);
@@ -447,6 +540,65 @@ CRITICAL RULES:
             // Save to history
             const tokens = await fetchTokenCount(newRightText);
             saveToHistory(debouncedLeft, newRightText, leftTokenCount, tokens);
+          }
+        } else if (diff && debouncedLeft.length < prevLeftText.length) {
+          // Text was deleted - check if it's a partial deletion or full line deletion
+          const newLines = debouncedLeft.split('\n');
+          const oldLines = prevLeftText.split('\n');
+          
+          // Check if lines were completely removed or just partially modified
+          const linesCompletelyRemoved = diff.oldEnd >= diff.start && 
+                                         (diff.end < diff.start || 
+                                          (diff.end === 0 && diff.start === 0 && newLines.length < oldLines.length));
+          
+          if (linesCompletelyRemoved && newLines.length < oldLines.length) {
+            // Complete line deletion - highlight lines in red, then remove after delay
+            applyDeletionHighlights('right', prevRightText, diff.start, diff.oldEnd, 1000);
+            
+            // Wait 1 second before actually deleting
+            setTimeout(() => {
+              const rightLines = prevRightText.split('\n');
+              const newRightLines = [
+                ...rightLines.slice(0, diff.start),
+                ...rightLines.slice(diff.oldEnd + 1)
+              ];
+              
+              const newRightText = newRightLines.join('\n');
+              setRightText(newRightText);
+              setPrevLeftText(debouncedLeft);
+              setPrevRightText(newRightText);
+              
+              fetchTokenCount(newRightText).then(tokens => {
+                saveToHistory(debouncedLeft, newRightText, leftTokenCount, tokens);
+              });
+            }, 1000);
+          } else {
+            // Partial deletion within a line - retranslate the modified lines
+            const modifiedLines = newLines.slice(diff.start, Math.max(diff.start + 1, diff.end + 1));
+            const modifiedText = modifiedLines.join('\n');
+            
+            if (modifiedText.trim()) {
+              const translatedDiff = await translateText(modifiedText, "Japanese", "English");
+              if (translatedDiff !== undefined) {
+                const rightLines = prevRightText.split('\n');
+                const translatedLines = translatedDiff.split('\n');
+                
+                const newRightLines = [
+                  ...rightLines.slice(0, diff.start),
+                  ...translatedLines,
+                  ...rightLines.slice(diff.start + modifiedLines.length)
+                ];
+                
+                const newRightText = newRightLines.join('\n');
+                applyHighlights('right', prevRightText, newRightText);
+                setRightText(newRightText);
+                setPrevLeftText(debouncedLeft);
+                setPrevRightText(newRightText);
+                
+                const tokens = await fetchTokenCount(newRightText);
+                saveToHistory(debouncedLeft, newRightText, leftTokenCount, tokens);
+              }
+            }
           }
         }
       };
@@ -462,15 +614,16 @@ CRITICAL RULES:
     // Update token count independently of translation trigger
     fetchTokenCount(debouncedRight).then(setRightTokenCount);
 
-    if (lastEdited === 'right' && debouncedRight && userSettings.autoTranslate) {
+    if (lastEdited === 'right' && userSettings.autoTranslate) {
       const performTranslation = async () => {
         // Check if this is the first translation or a diff update
         const diff = findDifferences(prevRightText, debouncedRight);
         
-        if (!prevRightText || !diff) {
-          // First translation or no meaningful diff - translate everything
+        if (!prevRightText) {
+          // First translation - translate everything
           const translated = await translateText(debouncedRight, "English", "Japanese");
           if (translated !== undefined) {
+            applyHighlights('left', prevLeftText, translated);
             setLeftText(translated);
             setPrevRightText(debouncedRight);
             setPrevLeftText(translated);
@@ -478,8 +631,8 @@ CRITICAL RULES:
             const tokens = await fetchTokenCount(translated);
             saveToHistory(translated, debouncedRight, tokens, rightTokenCount);
           }
-        } else {
-          // Translate only the changed portion
+        } else if (diff && diff.changedText.trim() && debouncedRight.length >= prevRightText.length) {
+          // Translate only the changed portion (additions/modifications)
           const translatedDiff = await translateText(diff.changedText, "English", "Japanese");
           if (translatedDiff !== undefined) {
             // Merge the translated diff back into the left text
@@ -494,6 +647,7 @@ CRITICAL RULES:
             ];
             
             const newLeftText = newLeftLines.join('\n');
+            applyHighlights('left', prevLeftText, newLeftText);
             setLeftText(newLeftText);
             setPrevRightText(debouncedRight);
             setPrevLeftText(newLeftText);
@@ -501,6 +655,65 @@ CRITICAL RULES:
             // Save to history
             const tokens = await fetchTokenCount(newLeftText);
             saveToHistory(newLeftText, debouncedRight, tokens, rightTokenCount);
+          }
+        } else if (diff && debouncedRight.length < prevRightText.length) {
+          // Text was deleted - check if it's a partial deletion or full line deletion
+          const newLines = debouncedRight.split('\n');
+          const oldLines = prevRightText.split('\n');
+          
+          // Check if lines were completely removed or just partially modified
+          const linesCompletelyRemoved = diff.oldEnd >= diff.start && 
+                                         (diff.end < diff.start || 
+                                          (diff.end === 0 && diff.start === 0 && newLines.length < oldLines.length));
+          
+          if (linesCompletelyRemoved && newLines.length < oldLines.length) {
+            // Complete line deletion - highlight lines in red, then remove after delay
+            applyDeletionHighlights('left', prevLeftText, diff.start, diff.oldEnd, 1000);
+            
+            // Wait 1 second before actually deleting
+            setTimeout(() => {
+              const leftLines = prevLeftText.split('\n');
+              const newLeftLines = [
+                ...leftLines.slice(0, diff.start),
+                ...leftLines.slice(diff.oldEnd + 1)
+              ];
+              
+              const newLeftText = newLeftLines.join('\n');
+              setLeftText(newLeftText);
+              setPrevRightText(debouncedRight);
+              setPrevLeftText(newLeftText);
+              
+              fetchTokenCount(newLeftText).then(tokens => {
+                saveToHistory(newLeftText, debouncedRight, tokens, rightTokenCount);
+              });
+            }, 1000);
+          } else {
+            // Partial deletion within a line - retranslate the modified lines
+            const modifiedLines = newLines.slice(diff.start, Math.max(diff.start + 1, diff.end + 1));
+            const modifiedText = modifiedLines.join('\n');
+            
+            if (modifiedText.trim()) {
+              const translatedDiff = await translateText(modifiedText, "English", "Japanese");
+              if (translatedDiff !== undefined) {
+                const leftLines = prevLeftText.split('\n');
+                const translatedLines = translatedDiff.split('\n');
+                
+                const newLeftLines = [
+                  ...leftLines.slice(0, diff.start),
+                  ...translatedLines,
+                  ...leftLines.slice(diff.start + modifiedLines.length)
+                ];
+                
+                const newLeftText = newLeftLines.join('\n');
+                applyHighlights('left', prevLeftText, newLeftText);
+                setLeftText(newLeftText);
+                setPrevRightText(debouncedRight);
+                setPrevLeftText(newLeftText);
+                
+                const tokens = await fetchTokenCount(newLeftText);
+                saveToHistory(newLeftText, debouncedRight, tokens, rightTokenCount);
+              }
+            }
           }
         }
       };
@@ -573,18 +786,19 @@ CRITICAL RULES:
     // Check if this is the first translation or a diff update
     const diff = findDifferences(prevLeftText, leftText);
     
-    if (!prevLeftText || !diff) {
-      // First translation or no meaningful diff - translate everything
+    if (!prevLeftText) {
+      // First translation - translate everything
       const translated = await translateText(leftText, "Japanese", "English");
       if (translated !== undefined) {
+        applyHighlights('right', prevRightText, translated);
         setRightText(translated);
         setPrevLeftText(leftText);
         setPrevRightText(translated);
         const tokens = await fetchTokenCount(translated);
         saveToHistory(leftText, translated, leftTokenCount, tokens);
       }
-    } else {
-      // Translate only the changed portion
+    } else if (diff && diff.changedText.trim() && leftText.length >= prevLeftText.length) {
+      // Translate only the changed portion (additions/modifications)
       const translatedDiff = await translateText(diff.changedText, "Japanese", "English");
       if (translatedDiff !== undefined) {
         // Merge the translated diff back into the right text
@@ -599,6 +813,7 @@ CRITICAL RULES:
         ];
         
         const newRightText = newRightLines.join('\n');
+        applyHighlights('right', prevRightText, newRightText);
         setRightText(newRightText);
         setPrevLeftText(leftText);
         setPrevRightText(newRightText);
@@ -606,6 +821,65 @@ CRITICAL RULES:
         // Save to history
         const tokens = await fetchTokenCount(newRightText);
         saveToHistory(leftText, newRightText, leftTokenCount, tokens);
+      }
+    } else if (diff && leftText.length < prevLeftText.length) {
+      // Text was deleted - check if it's a partial deletion or full line deletion
+      const newLines = leftText.split('\n');
+      const oldLines = prevLeftText.split('\n');
+      
+      // Check if lines were completely removed or just partially modified
+      const linesCompletelyRemoved = diff.oldEnd >= diff.start && 
+                                     (diff.end < diff.start || 
+                                      (diff.end === 0 && diff.start === 0 && newLines.length < oldLines.length));
+      
+      if (linesCompletelyRemoved && newLines.length < oldLines.length) {
+        // Complete line deletion - highlight lines in red, then remove after delay
+        applyDeletionHighlights('right', prevRightText, diff.start, diff.oldEnd, 1000);
+        
+        // Wait 1 second before actually deleting
+        setTimeout(() => {
+          const rightLines = prevRightText.split('\n');
+          const newRightLines = [
+            ...rightLines.slice(0, diff.start),
+            ...rightLines.slice(diff.oldEnd + 1)
+          ];
+          
+          const newRightText = newRightLines.join('\n');
+          setRightText(newRightText);
+          setPrevLeftText(leftText);
+          setPrevRightText(newRightText);
+          
+          fetchTokenCount(newRightText).then(tokens => {
+            saveToHistory(leftText, newRightText, leftTokenCount, tokens);
+          });
+        }, 1000);
+      } else {
+        // Partial deletion within a line - retranslate the modified lines
+        const modifiedLines = newLines.slice(diff.start, Math.max(diff.start + 1, diff.end + 1));
+        const modifiedText = modifiedLines.join('\n');
+        
+        if (modifiedText.trim()) {
+          const translatedDiff = await translateText(modifiedText, "Japanese", "English");
+          if (translatedDiff !== undefined) {
+            const rightLines = prevRightText.split('\n');
+            const translatedLines = translatedDiff.split('\n');
+            
+            const newRightLines = [
+              ...rightLines.slice(0, diff.start),
+              ...translatedLines,
+              ...rightLines.slice(diff.start + modifiedLines.length)
+            ];
+            
+            const newRightText = newRightLines.join('\n');
+            applyHighlights('right', prevRightText, newRightText);
+            setRightText(newRightText);
+            setPrevLeftText(leftText);
+            setPrevRightText(newRightText);
+            
+            const tokens = await fetchTokenCount(newRightText);
+            saveToHistory(leftText, newRightText, leftTokenCount, tokens);
+          }
+        }
       }
     }
   };
@@ -617,18 +891,19 @@ CRITICAL RULES:
     // Check if this is the first translation or a diff update
     const diff = findDifferences(prevRightText, rightText);
     
-    if (!prevRightText || !diff) {
-      // First translation or no meaningful diff - translate everything
+    if (!prevRightText) {
+      // First translation - translate everything
       const translated = await translateText(rightText, "English", "Japanese");
       if (translated !== undefined) {
+        applyHighlights('left', prevLeftText, translated);
         setLeftText(translated);
         setPrevRightText(rightText);
         setPrevLeftText(translated);
         const tokens = await fetchTokenCount(translated);
         saveToHistory(translated, rightText, tokens, rightTokenCount);
       }
-    } else {
-      // Translate only the changed portion
+    } else if (diff && diff.changedText.trim() && rightText.length >= prevRightText.length) {
+      // Translate only the changed portion (additions/modifications)
       const translatedDiff = await translateText(diff.changedText, "English", "Japanese");
       if (translatedDiff !== undefined) {
         // Merge the translated diff back into the left text
@@ -643,6 +918,7 @@ CRITICAL RULES:
         ];
         
         const newLeftText = newLeftLines.join('\n');
+        applyHighlights('left', prevLeftText, newLeftText);
         setLeftText(newLeftText);
         setPrevRightText(rightText);
         setPrevLeftText(newLeftText);
@@ -650,6 +926,65 @@ CRITICAL RULES:
         // Save to history
         const tokens = await fetchTokenCount(newLeftText);
         saveToHistory(newLeftText, rightText, tokens, rightTokenCount);
+      }
+    } else if (diff && rightText.length < prevRightText.length) {
+      // Text was deleted - check if it's a partial deletion or full line deletion
+      const newLines = rightText.split('\n');
+      const oldLines = prevRightText.split('\n');
+      
+      // Check if lines were completely removed or just partially modified
+      const linesCompletelyRemoved = diff.oldEnd >= diff.start && 
+                                     (diff.end < diff.start || 
+                                      (diff.end === 0 && diff.start === 0 && newLines.length < oldLines.length));
+      
+      if (linesCompletelyRemoved && newLines.length < oldLines.length) {
+        // Complete line deletion - highlight lines in red, then remove after delay
+        applyDeletionHighlights('left', prevLeftText, diff.start, diff.oldEnd, 1000);
+        
+        // Wait 1 second before actually deleting
+        setTimeout(() => {
+          const leftLines = prevLeftText.split('\n');
+          const newLeftLines = [
+            ...leftLines.slice(0, diff.start),
+            ...leftLines.slice(diff.oldEnd + 1)
+          ];
+          
+          const newLeftText = newLeftLines.join('\n');
+          setLeftText(newLeftText);
+          setPrevRightText(rightText);
+          setPrevLeftText(newLeftText);
+          
+          fetchTokenCount(newLeftText).then(tokens => {
+            saveToHistory(newLeftText, rightText, tokens, rightTokenCount);
+          });
+        }, 1000);
+      } else {
+        // Partial deletion within a line - retranslate the modified lines
+        const modifiedLines = newLines.slice(diff.start, Math.max(diff.start + 1, diff.end + 1));
+        const modifiedText = modifiedLines.join('\n');
+        
+        if (modifiedText.trim()) {
+          const translatedDiff = await translateText(modifiedText, "English", "Japanese");
+          if (translatedDiff !== undefined) {
+            const leftLines = prevLeftText.split('\n');
+            const translatedLines = translatedDiff.split('\n');
+            
+            const newLeftLines = [
+              ...leftLines.slice(0, diff.start),
+              ...translatedLines,
+              ...leftLines.slice(diff.start + modifiedLines.length)
+            ];
+            
+            const newLeftText = newLeftLines.join('\n');
+            applyHighlights('left', prevLeftText, newLeftText);
+            setLeftText(newLeftText);
+            setPrevRightText(rightText);
+            setPrevLeftText(newLeftText);
+            
+            const tokens = await fetchTokenCount(newLeftText);
+            saveToHistory(newLeftText, rightText, tokens, rightTokenCount);
+          }
+        }
       }
     }
   };
@@ -735,6 +1070,7 @@ CRITICAL RULES:
             langIcon={<span className="text-xs font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-700">JP</span>}
             showManualTranslate={!userSettings.autoTranslate}
             onManualTranslate={handleManualTranslateLeft}
+            highlights={leftHighlights}
           />
 
           {/* Right Pane (English) */}
@@ -748,6 +1084,7 @@ CRITICAL RULES:
             langIcon={<span className="text-xs font-bold bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-700">EN</span>}
             showManualTranslate={!userSettings.autoTranslate}
             onManualTranslate={handleManualTranslateRight}
+            highlights={rightHighlights}
           />
 
         </div>
@@ -953,15 +1290,59 @@ interface EditorPaneProps {
   tokenCount: number;
   showManualTranslate?: boolean;
   onManualTranslate?: () => void;
+  highlights?: { start: number; end: number; type: 'added' | 'removed' }[];
 }
 
-const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount, showManualTranslate, onManualTranslate }: EditorPaneProps) => {
+const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount, showManualTranslate, onManualTranslate, highlights = [] }: EditorPaneProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Render text with highlights
+  const renderHighlightedText = () => {
+    if (!highlights.length || !value) return null;
+
+    const parts: React.ReactElement[] = [];
+    let lastIndex = 0;
+
+    highlights.forEach((highlight, idx) => {
+      // Add text before highlight
+      if (highlight.start > lastIndex) {
+        parts.push(
+          <span key={`text-${idx}`}>{value.substring(lastIndex, highlight.start)}</span>
+        );
+      }
+
+      // Add highlighted text
+      const highlightedText = value.substring(highlight.start, highlight.end);
+      parts.push(
+        <span
+          key={`highlight-${idx}`}
+          className={`${
+            highlight.type === 'added'
+              ? 'bg-green-200/70 animate-fade-out'
+              : 'bg-red-200/70 line-through animate-fade-out'
+          }`}
+        >
+          {highlightedText}
+        </span>
+      );
+
+      lastIndex = highlight.end;
+    });
+
+    // Add remaining text
+    if (lastIndex < value.length) {
+      parts.push(
+        <span key="text-end">{value.substring(lastIndex)}</span>
+      );
+    }
+
+    return <div className="absolute inset-0 p-5 text-[15px] leading-relaxed font-mono whitespace-pre-wrap pointer-events-none break-words">{parts}</div>;
   };
 
   return (
@@ -1015,9 +1396,14 @@ const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIc
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className="w-full h-full p-5 resize-none outline-none text-gray-800 text-[15px] leading-relaxed font-mono placeholder:text-gray-400"
+          className={`w-full h-full p-5 resize-none outline-none text-[15px] leading-relaxed font-mono placeholder:text-gray-400 ${
+            highlights.length > 0 ? 'text-transparent caret-gray-800' : 'text-gray-800'
+          }`}
           spellCheck="false"
         />
+        
+        {/* Highlighted Text Overlay */}
+        {renderHighlightedText()}
         
         {/* Loading Overlay for this specific pane */}
         {isTranslating && (
