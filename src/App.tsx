@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Settings, ArrowRightLeft, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type } from 'lucide-react';
+import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type } from 'lucide-react';
+import logoImage from '/logo.png';
 
 // --- Gemini API Configuration ---
 // In a real environment, this might be injected. 
@@ -176,12 +177,15 @@ const App = () => {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg text-white">
-            <ArrowRightLeft size={20} />
+          <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <img src={logoImage} alt="JpEn Logo" className="w-10 h-10 object-contain" />
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight text-slate-800">Prompt Sync Editor</h1>
-            <p className="text-xs text-slate-500">Japanese ⇔ English Bi-directional Sync</p>
+            <h1 className="text-xl leading-tight text-black tracking-wide flex items-baseline gap-2">
+              <span style={{fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontStyle: 'italic'}}>JpEn</span>
+              <span className="text-base font-normal text-slate-600">- Prompt Sync Editor</span>
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">日本語と英語を双方向で同期しながらプロンプトを作成できます。</p>
           </div>
         </div>
 
