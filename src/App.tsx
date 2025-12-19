@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2 } from 'lucide-react';
+import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User } from 'lucide-react';
 import logoImage from '/logo.png';
 
 // --- Gemini API Configuration ---
@@ -8,6 +8,12 @@ import logoImage from '/logo.png';
 const DEFAULT_API_KEY = ""; 
 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+
+// User Settings interface
+interface UserSettings {
+  autoTranslate: boolean;
+  translationDelay: number; // in milliseconds
+}
 
 // History state interface
 interface HistoryState {
@@ -21,6 +27,19 @@ const App = () => {
   // State
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || DEFAULT_API_KEY);
   const [isSettingsOpen, setIsSettingsOpen] = useState(!apiKey);
+  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
+  
+  // User Settings
+  const [userSettings, setUserSettings] = useState<UserSettings>(() => {
+    const saved = localStorage.getItem('user_settings');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return {
+      autoTranslate: true,
+      translationDelay: 1000
+    };
+  });
   
   const [leftText, setLeftText] = useState(""); // Japanese (usually)
   const [rightText, setRightText] = useState(""); // English (usually)
@@ -47,20 +66,27 @@ const App = () => {
 
   // Setup debounce timers
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedLeft(leftText), 1000);
+    const timer = setTimeout(() => setDebouncedLeft(leftText), userSettings.translationDelay);
     return () => clearTimeout(timer);
-  }, [leftText]);
+  }, [leftText, userSettings.translationDelay]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedRight(rightText), 1000);
+    const timer = setTimeout(() => setDebouncedRight(rightText), userSettings.translationDelay);
     return () => clearTimeout(timer);
-  }, [rightText]);
+  }, [rightText, userSettings.translationDelay]);
 
   // Save API Key
   const handleSaveApiKey = (key: string) => {
     setApiKey(key);
     localStorage.setItem('gemini_api_key', key);
     setIsSettingsOpen(false);
+  };
+
+  // Save User Settings
+  const handleSaveUserSettings = (settings: UserSettings) => {
+    setUserSettings(settings);
+    localStorage.setItem('user_settings', JSON.stringify(settings));
+    setIsUserSettingsOpen(false);
   };
 
   // Helper: Fetch Token Count
@@ -120,20 +146,20 @@ const App = () => {
   };
 
   // Find differences between two texts (simple line-based diff)
-  const findDifferences = (oldText: string, newText: string): { start: number; end: number; changedText: string } | null => {
+  const findDifferences = (oldText: string, newText: string): { start: number; end: number; changedText: string; oldEnd: number } | null => {
     if (oldText === newText) return null;
     
     const oldLines = oldText.split('\n');
     const newLines = newText.split('\n');
     
-    // Find first different line
+    // Find first different line (strict comparison including empty lines)
     let startLine = 0;
     while (startLine < Math.min(oldLines.length, newLines.length) && 
            oldLines[startLine] === newLines[startLine]) {
       startLine++;
     }
     
-    // Find last different line
+    // Find last different line from the end
     let endLineOld = oldLines.length - 1;
     let endLineNew = newLines.length - 1;
     while (endLineOld >= startLine && endLineNew >= startLine && 
@@ -142,12 +168,13 @@ const App = () => {
       endLineNew--;
     }
     
-    // Extract changed portion
+    // Extract changed portion (preserve all lines including empty ones)
     const changedText = newLines.slice(startLine, endLineNew + 1).join('\n');
     
     return {
       start: startLine,
       end: endLineNew,
+      oldEnd: endLineOld,
       changedText
     };
   };
@@ -240,7 +267,7 @@ const App = () => {
     // Update token count independently of translation trigger
     fetchTokenCount(debouncedLeft).then(setLeftTokenCount);
 
-    if (lastEdited === 'left' && debouncedLeft) {
+    if (lastEdited === 'left' && debouncedLeft && userSettings.autoTranslate) {
       const performTranslation = async () => {
         // Check if this is the first translation or a diff update
         const diff = findDifferences(prevLeftText, debouncedLeft);
@@ -264,11 +291,11 @@ const App = () => {
             const rightLines = prevRightText.split('\n');
             const translatedLines = translatedDiff.split('\n');
             
-            // Replace the changed lines
+            // Replace the changed lines (use oldEnd for accurate line removal)
             const newRightLines = [
               ...rightLines.slice(0, diff.start),
               ...translatedLines,
-              ...rightLines.slice(diff.end + 1)
+              ...rightLines.slice(diff.oldEnd + 1)
             ];
             
             const newRightText = newRightLines.join('\n');
@@ -294,7 +321,7 @@ const App = () => {
     // Update token count independently of translation trigger
     fetchTokenCount(debouncedRight).then(setRightTokenCount);
 
-    if (lastEdited === 'right' && debouncedRight) {
+    if (lastEdited === 'right' && debouncedRight && userSettings.autoTranslate) {
       const performTranslation = async () => {
         // Check if this is the first translation or a diff update
         const diff = findDifferences(prevRightText, debouncedRight);
@@ -318,11 +345,11 @@ const App = () => {
             const leftLines = prevLeftText.split('\n');
             const translatedLines = translatedDiff.split('\n');
             
-            // Replace the changed lines
+            // Replace the changed lines (use oldEnd for accurate line removal)
             const newLeftLines = [
               ...leftLines.slice(0, diff.start),
               ...translatedLines,
-              ...leftLines.slice(diff.end + 1)
+              ...leftLines.slice(diff.oldEnd + 1)
             ];
             
             const newLeftText = newLeftLines.join('\n');
@@ -397,6 +424,93 @@ const App = () => {
     setHistoryIndex(-1);
   };
 
+  // Manual translation handlers
+  const handleManualTranslateLeft = async () => {
+    if (!leftText || !apiKey) return;
+    
+    // Check if this is the first translation or a diff update
+    const diff = findDifferences(prevLeftText, leftText);
+    
+    if (!prevLeftText || !diff) {
+      // First translation or no meaningful diff - translate everything
+      const translated = await translateText(leftText, "Japanese", "English");
+      if (translated !== null) {
+        setRightText(translated);
+        setPrevLeftText(leftText);
+        setPrevRightText(translated);
+        const tokens = await fetchTokenCount(translated);
+        saveToHistory(leftText, translated, leftTokenCount, tokens);
+      }
+    } else {
+      // Translate only the changed portion
+      const translatedDiff = await translateText(diff.changedText, "Japanese", "English");
+      if (translatedDiff !== null) {
+        // Merge the translated diff back into the right text
+        const rightLines = prevRightText.split('\n');
+        const translatedLines = translatedDiff.split('\n');
+        
+        // Replace the changed lines (use oldEnd for accurate line removal)
+        const newRightLines = [
+          ...rightLines.slice(0, diff.start),
+          ...translatedLines,
+          ...rightLines.slice(diff.oldEnd + 1)
+        ];
+        
+        const newRightText = newRightLines.join('\n');
+        setRightText(newRightText);
+        setPrevLeftText(leftText);
+        setPrevRightText(newRightText);
+        
+        // Save to history
+        const tokens = await fetchTokenCount(newRightText);
+        saveToHistory(leftText, newRightText, leftTokenCount, tokens);
+      }
+    }
+  };
+
+  const handleManualTranslateRight = async () => {
+    if (!rightText || !apiKey) return;
+    
+    // Check if this is the first translation or a diff update
+    const diff = findDifferences(prevRightText, rightText);
+    
+    if (!prevRightText || !diff) {
+      // First translation or no meaningful diff - translate everything
+      const translated = await translateText(rightText, "English", "Japanese");
+      if (translated !== null) {
+        setLeftText(translated);
+        setPrevRightText(rightText);
+        setPrevLeftText(translated);
+        const tokens = await fetchTokenCount(translated);
+        saveToHistory(translated, rightText, tokens, rightTokenCount);
+      }
+    } else {
+      // Translate only the changed portion
+      const translatedDiff = await translateText(diff.changedText, "English", "Japanese");
+      if (translatedDiff !== null) {
+        // Merge the translated diff back into the left text
+        const leftLines = prevLeftText.split('\n');
+        const translatedLines = translatedDiff.split('\n');
+        
+        // Replace the changed lines (use oldEnd for accurate line removal)
+        const newLeftLines = [
+          ...leftLines.slice(0, diff.start),
+          ...translatedLines,
+          ...leftLines.slice(diff.oldEnd + 1)
+        ];
+        
+        const newLeftText = newLeftLines.join('\n');
+        setLeftText(newLeftText);
+        setPrevRightText(rightText);
+        setPrevLeftText(newLeftText);
+        
+        // Save to history
+        const tokens = await fetchTokenCount(newLeftText);
+        saveToHistory(newLeftText, rightText, tokens, rightTokenCount);
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
@@ -447,6 +561,13 @@ const App = () => {
             <Eraser size={18} />
           </button>
           <button 
+            onClick={() => setIsUserSettingsOpen(true)}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            title="ユーザー設定"
+          >
+            <User size={18} />
+          </button>
+          <button 
             onClick={() => setIsSettingsOpen(true)}
             className={`p-2 rounded-md transition-colors ${!apiKey ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
             title="API設定"
@@ -469,6 +590,8 @@ const App = () => {
             isTranslating={isTranslating && lastEdited === 'right'}
             tokenCount={leftTokenCount}
             langIcon={<span className="text-xs font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-700">JP</span>}
+            showManualTranslate={!userSettings.autoTranslate}
+            onManualTranslate={handleManualTranslateLeft}
           />
 
           {/* Right Pane (English) */}
@@ -480,6 +603,8 @@ const App = () => {
             isTranslating={isTranslating && lastEdited === 'left'}
             tokenCount={rightTokenCount}
             langIcon={<span className="text-xs font-bold bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-700">EN</span>}
+            showManualTranslate={!userSettings.autoTranslate}
+            onManualTranslate={handleManualTranslateRight}
           />
 
         </div>
@@ -491,6 +616,83 @@ const App = () => {
           <AlertCircle size={18} />
           <div className="text-sm font-medium">{error}</div>
           <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 font-bold text-lg leading-none">&times;</button>
+        </div>
+      )}
+
+      {/* User Settings Modal */}
+      {isUserSettingsOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2 text-gray-900">
+              <User size={20} className="text-gray-700" />
+              ユーザー設定
+            </h2>
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              翻訳の動作を調整できます。
+            </p>
+            
+            <div className="space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-700">自動翻訳</span>
+                  <label htmlFor="autoTranslate" className="relative inline-block w-12 h-6 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={userSettings.autoTranslate}
+                      onChange={(e) => setUserSettings({ ...userSettings, autoTranslate: e.target.checked })}
+                      className="sr-only peer"
+                      id="autoTranslate"
+                    />
+                    <span className="absolute inset-0 bg-gray-300 rounded-full peer-checked:bg-blue-600 transition-colors"></span>
+                    <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-6"></span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {userSettings.autoTranslate 
+                    ? 'タイピング停止後、自動的に翻訳されます' 
+                    : '手動で翻訳ボタンを押す必要があります'}
+                </p>
+              </div>
+              
+              <div>
+                <label className={`block text-sm font-semibold mb-2 transition-colors ${!userSettings.autoTranslate ? 'text-gray-400' : 'text-gray-700'}`}>
+                  翻訳遅延時間: {(userSettings.translationDelay / 1000).toFixed(1)}秒
+                </label>
+                <input 
+                  type="range" 
+                  min="500" 
+                  max="5000" 
+                  step="100"
+                  value={userSettings.translationDelay}
+                  onChange={(e) => setUserSettings({ ...userSettings, translationDelay: Number(e.target.value) })}
+                  className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 transition-opacity ${!userSettings.autoTranslate ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  disabled={!userSettings.autoTranslate}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0.5秒</span>
+                  <span>5.0秒</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  タイピングが止まってから翻訳が開始されるまでの待機時間です。
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
+                <button 
+                  onClick={() => setIsUserSettingsOpen(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button 
+                  onClick={() => handleSaveUserSettings(userSettings)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -555,9 +757,11 @@ interface EditorPaneProps {
   isTranslating: boolean;
   langIcon: React.ReactNode;
   tokenCount: number;
+  showManualTranslate?: boolean;
+  onManualTranslate?: () => void;
 }
 
-const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount }: EditorPaneProps) => {
+const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount, showManualTranslate, onManualTranslate }: EditorPaneProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -589,6 +793,16 @@ const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIc
              </div>
           </div>
 
+          {showManualTranslate && onManualTranslate && (
+            <button 
+              onClick={onManualTranslate}
+              disabled={!value || isTranslating}
+              className="px-2.5 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-gray-600 border border-transparent disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Type size={13} />
+              翻訳
+            </button>
+          )}
           <button 
             onClick={handleCopy}
             disabled={!value}
