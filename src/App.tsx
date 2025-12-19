@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, ArrowRightLeft, Copy, Check, AlertCircle, Languages, Eraser, Loader2, Calculator, Type } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, ArrowRightLeft, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type } from 'lucide-react';
 
 // --- Gemini API Configuration ---
 // In a real environment, this might be injected. 
@@ -21,8 +21,8 @@ const App = () => {
   const [rightTokenCount, setRightTokenCount] = useState(0);
   
   const [isTranslating, setIsTranslating] = useState(false);
-  const [lastEdited, setLastEdited] = useState(null); // 'left' or 'right'
-  const [error, setError] = useState(null);
+  const [lastEdited, setLastEdited] = useState<'left' | 'right' | null>(null); // 'left' or 'right'
+  const [error, setError] = useState<string | null>(null);
 
   // Debounce logic to prevent API spam
   const [debouncedLeft, setDebouncedLeft] = useState(leftText);
@@ -40,14 +40,14 @@ const App = () => {
   }, [rightText]);
 
   // Save API Key
-  const handleSaveApiKey = (key) => {
+  const handleSaveApiKey = (key: string) => {
     setApiKey(key);
     localStorage.setItem('gemini_api_key', key);
     setIsSettingsOpen(false);
   };
 
   // Helper: Fetch Token Count
-  const fetchTokenCount = async (text) => {
+  const fetchTokenCount = async (text: string) => {
     if (!text.trim() || !apiKey) return 0;
     try {
       const response = await fetch(
@@ -69,7 +69,7 @@ const App = () => {
   };
 
   // Translation Function
-  const translateText = async (text, sourceLang, targetLang) => {
+  const translateText = async (text: string, sourceLang: string, targetLang: string) => {
     if (!text.trim() || !apiKey) return;
 
     setIsTranslating(true);
@@ -109,7 +109,7 @@ const App = () => {
       return translatedContent.trim();
 
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Translation failed');
       return null;
     } finally {
       setIsTranslating(false);
@@ -153,12 +153,12 @@ const App = () => {
   }, [debouncedRight, apiKey]);
 
   // Handlers
-  const handleLeftChange = (e) => {
+  const handleLeftChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLeftText(e.target.value);
     setLastEdited('left');
   };
 
-  const handleRightChange = (e) => {
+  const handleRightChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRightText(e.target.value);
     setLastEdited('right');
   };
@@ -253,11 +253,11 @@ const App = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Settings size={24} className="text-slate-700" />
-              Configuration
+              設定
             </h2>
             <p className="text-sm text-slate-600 mb-4">
-              To enable real-time neural translation and token counting, please enter your Google Gemini API Key. 
-              The key is stored locally in your browser.
+              リアルタイム翻訳とトークン数カウント機能を有効にするには、Google Gemini API キーを入力してください。
+              キーはブラウザのローカルストレージに保存されます。
             </p>
             
             <div className="space-y-4">
@@ -278,19 +278,19 @@ const App = () => {
                     onClick={() => setIsSettingsOpen(false)}
                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium"
                   >
-                    Cancel
+                    キャンセル
                   </button>
                 )}
                 <button 
                   onClick={() => handleSaveApiKey(apiKey)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm"
                 >
-                  Save & Start
+                  保存して開始
                 </button>
               </div>
               
               <p className="text-xs text-slate-400 mt-4 text-center">
-                Don't have a key? Get one from Google AI Studio.
+                キーをお持ちでない場合は、Google AI Studio から取得できます。
               </p>
             </div>
           </div>
@@ -301,7 +301,17 @@ const App = () => {
 };
 
 // Sub-component for Editor Pane
-const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount }) => {
+interface EditorPaneProps {
+  title: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder: string;
+  isTranslating: boolean;
+  langIcon: React.ReactNode;
+  tokenCount: number;
+}
+
+const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIcon, tokenCount }: EditorPaneProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
