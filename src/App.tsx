@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type } from 'lucide-react';
+import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2 } from 'lucide-react';
 import logoImage from '/logo.png';
 
 // --- Gemini API Configuration ---
@@ -8,6 +8,14 @@ import logoImage from '/logo.png';
 const DEFAULT_API_KEY = ""; 
 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+
+// History state interface
+interface HistoryState {
+  leftText: string;
+  rightText: string;
+  leftTokenCount: number;
+  rightTokenCount: number;
+}
 
 const App = () => {
   // State
@@ -24,6 +32,10 @@ const App = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [lastEdited, setLastEdited] = useState<'left' | 'right' | null>(null); // 'left' or 'right'
   const [error, setError] = useState<string | null>(null);
+  
+  // History state for undo/redo
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   // Debounce logic to prevent API spam
   const [debouncedLeft, setDebouncedLeft] = useState(leftText);
@@ -117,6 +129,29 @@ const App = () => {
     }
   };
 
+  // Save current state to history
+  const saveToHistory = (left: string, right: string, leftTokens: number, rightTokens: number) => {
+    const newState: HistoryState = {
+      leftText: left,
+      rightText: right,
+      leftTokenCount: leftTokens,
+      rightTokenCount: rightTokens
+    };
+    
+    // Remove any history after current index (when user makes changes after undo)
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newState);
+    
+    // Limit history to 50 states
+    if (newHistory.length > 50) {
+      newHistory.shift();
+    } else {
+      setHistoryIndex(historyIndex + 1);
+    }
+    
+    setHistory(newHistory);
+  };
+
   // Effect: Trigger translation when LEFT (Japanese) changes consistently
   useEffect(() => {
     // Update token count independently of translation trigger
@@ -127,12 +162,16 @@ const App = () => {
         const translated = await translateText(debouncedLeft, "Japanese", "English");
         if (translated !== null) {
           setRightText(translated);
+          // Save to history after translation completes
+          const tokens = await fetchTokenCount(translated);
+          saveToHistory(debouncedLeft, translated, leftTokenCount, tokens);
         }
       };
       performTranslation();
     } else if (!debouncedLeft) {
         setLeftTokenCount(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedLeft, apiKey]);
 
   // Effect: Trigger translation when RIGHT (English) changes consistently
@@ -145,13 +184,44 @@ const App = () => {
         const translated = await translateText(debouncedRight, "English", "Japanese");
         if (translated !== null) {
           setLeftText(translated);
+          // Save to history after translation completes
+          const tokens = await fetchTokenCount(translated);
+          saveToHistory(translated, debouncedRight, tokens, rightTokenCount);
         }
       };
       performTranslation();
     } else if (!debouncedRight) {
         setRightTokenCount(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedRight, apiKey]);
+
+  // Undo/Redo handlers
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const state = history[newIndex];
+      setLeftText(state.leftText);
+      setRightText(state.rightText);
+      setLeftTokenCount(state.leftTokenCount);
+      setRightTokenCount(state.rightTokenCount);
+      setHistoryIndex(newIndex);
+      setLastEdited(null); // Prevent triggering translation
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const state = history[newIndex];
+      setLeftText(state.leftText);
+      setRightText(state.rightText);
+      setLeftTokenCount(state.leftTokenCount);
+      setRightTokenCount(state.rightTokenCount);
+      setHistoryIndex(newIndex);
+      setLastEdited(null); // Prevent triggering translation
+    }
+  };
 
   // Handlers
   const handleLeftChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -170,6 +240,8 @@ const App = () => {
     setLeftTokenCount(0);
     setRightTokenCount(0);
     setLastEdited(null);
+    setHistory([]);
+    setHistoryIndex(-1);
   };
 
   return (
@@ -196,6 +268,24 @@ const App = () => {
               <span className="font-medium">翻訳中...</span>
             </div>
           )}
+          <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
+            <button 
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title="前に戻る"
+            >
+              <Undo2 size={18} />
+            </button>
+            <button 
+              onClick={handleRedo}
+              disabled={historyIndex >= history.length - 1}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title="次に進む"
+            >
+              <Redo2 size={18} />
+            </button>
+          </div>
           <button 
             onClick={handleClear}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
