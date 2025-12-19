@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User } from 'lucide-react';
 import logoImage from '/logo.png';
+import { setEncryptedItem, getEncryptedItem } from './crypto';
 
 // --- LLM Provider Configuration ---
 type LLMProvider = 'gemini' | 'openai' | 'claude';
@@ -34,12 +35,10 @@ interface HistoryState {
 
 const App = () => {
   // State
-  const [apiKeys, setApiKeys] = useState(() => {
-    return {
-      gemini: localStorage.getItem('gemini_api_key') || '',
-      openai: localStorage.getItem('openai_api_key') || '',
-      claude: localStorage.getItem('claude_api_key') || ''
-    };
+  const [apiKeys, setApiKeys] = useState({
+    gemini: '',
+    openai: '',
+    claude: ''
   });
   
   // User Settings
@@ -67,7 +66,7 @@ const App = () => {
   });
   
   const hasAnyApiKey = apiKeys.gemini || apiKeys.openai || apiKeys.claude;
-  const [isSettingsOpen, setIsSettingsOpen] = useState(!hasAnyApiKey);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   
   const [leftText, setLeftText] = useState(""); // Japanese (usually)
@@ -97,6 +96,31 @@ const App = () => {
   const [debouncedLeft, setDebouncedLeft] = useState(leftText);
   const [debouncedRight, setDebouncedRight] = useState(rightText);
 
+  // Load encrypted API keys on mount
+  useEffect(() => {
+    const loadApiKeys = async () => {
+      try {
+        const [gemini, openai, claude] = await Promise.all([
+          getEncryptedItem('gemini_api_key'),
+          getEncryptedItem('openai_api_key'),
+          getEncryptedItem('claude_api_key')
+        ]);
+        
+        setApiKeys({ gemini, openai, claude });
+        
+        // APIキーがない場合は設定画面を開く
+        if (!gemini && !openai && !claude) {
+          setIsSettingsOpen(true);
+        }
+      } catch (error) {
+        console.error('APIキーの読み込みエラー:', error);
+        setIsSettingsOpen(true);
+      }
+    };
+    
+    loadApiKeys();
+  }, []);
+
   // Setup debounce timers
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedLeft(leftText), userSettings.translationDelay);
@@ -108,13 +132,22 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [rightText, userSettings.translationDelay]);
 
-  // Save API Keys
-  const handleSaveApiKeys = (keys: { gemini: string; openai: string; claude: string }) => {
-    setApiKeys(keys);
-    localStorage.setItem('gemini_api_key', keys.gemini);
-    localStorage.setItem('openai_api_key', keys.openai);
-    localStorage.setItem('claude_api_key', keys.claude);
-    setIsSettingsOpen(false);
+  // Save API Keys (with encryption)
+  const handleSaveApiKeys = async (keys: { gemini: string; openai: string; claude: string }) => {
+    try {
+      // 暗号化して保存
+      await Promise.all([
+        setEncryptedItem('gemini_api_key', keys.gemini),
+        setEncryptedItem('openai_api_key', keys.openai),
+        setEncryptedItem('claude_api_key', keys.claude)
+      ]);
+      
+      setApiKeys(keys);
+      setIsSettingsOpen(false);
+    } catch (error) {
+      console.error('APIキーの保存エラー:', error);
+      setError('APIキーの保存に失敗しました');
+    }
   };
 
   // Save User Settings
