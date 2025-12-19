@@ -175,47 +175,47 @@ const App = () => {
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
+      <header className="bg-white/95 backdrop-blur-sm border-b border-blue-100 px-6 py-3.5 flex items-center justify-between z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 flex items-center justify-center shrink-0">
-            <img src={logoImage} alt="JpEn Logo" className="w-10 h-10 object-contain" />
+          <div className="w-9 h-9 flex items-center justify-center shrink-0">
+            <img src={logoImage} alt="JpEn Logo" className="w-9 h-9 object-contain" />
           </div>
           <div>
-            <h1 className="text-xl leading-tight text-black tracking-wide flex items-baseline gap-2">
+            <h1 className="text-lg leading-tight text-gray-900 tracking-wide flex items-baseline gap-2">
               <span style={{fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontStyle: 'italic'}}>JpEn</span>
-              <span className="text-base font-normal text-slate-600">- Prompt Sync Editor</span>
+              <span className="text-sm font-normal text-gray-500">- Prompt Sync Editor</span>
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">日本語と英語を双方向で同期しながらプロンプトを作成できます。</p>
+            <p className="text-xs text-gray-500 mt-0.5">日本語と英語を双方向で同期しながらプロンプトを作成できます。</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
            {isTranslating && (
-            <div className="flex items-center gap-2 text-blue-600 text-sm bg-blue-50 px-3 py-1 rounded-full animate-pulse">
-              <Loader2 size={14} className="animate-spin" />
-              Translating...
+            <div className="flex items-center gap-2 text-blue-600 text-xs bg-blue-50 px-2.5 py-1.5 rounded-md">
+              <Loader2 size={12} className="animate-spin" />
+              <span className="font-medium">翻訳中...</span>
             </div>
           )}
           <button 
             onClick={handleClear}
-            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-            title="Clear All"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            title="クリア"
           >
-            <Eraser size={20} />
+            <Eraser size={18} />
           </button>
           <button 
             onClick={() => setIsSettingsOpen(true)}
-            className={`p-2 rounded-md transition-colors ${!apiKey ? 'text-red-500 bg-red-50 animate-pulse' : 'text-slate-500 hover:bg-slate-100'}`}
-            title="API Settings"
+            className={`p-2 rounded-md transition-colors ${!apiKey ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
+            title="API設定"
           >
-            <Settings size={20} />
+            <Settings size={18} />
           </button>
         </div>
       </header>
 
       {/* Main Content - Split View */}
-      <main className="flex-1 overflow-hidden relative">
-        <div className="h-full grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+      <main className="flex-1 overflow-hidden relative bg-gradient-to-br from-blue-50/30 to-slate-50">
+        <div className="h-full grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-blue-100">
           
           {/* Left Pane (Japanese) */}
           <EditorPane 
@@ -225,7 +225,7 @@ const App = () => {
             placeholder="ここに日本語のプロンプトを入力..."
             isTranslating={isTranslating && lastEdited === 'right'}
             tokenCount={leftTokenCount}
-            langIcon={<span className="text-xs font-bold bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">JP</span>}
+            langIcon={<span className="text-xs font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-700">JP</span>}
           />
 
           {/* Right Pane (English) */}
@@ -236,7 +236,7 @@ const App = () => {
             placeholder="English prompt will appear here, or type to translate back..."
             isTranslating={isTranslating && lastEdited === 'left'}
             tokenCount={rightTokenCount}
-            langIcon={<span className="text-xs font-bold bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">EN</span>}
+            langIcon={<span className="text-xs font-bold bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-700">EN</span>}
           />
 
         </div>
@@ -244,57 +244,56 @@ const App = () => {
 
       {/* Error Toast */}
       {error && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-red-100 border border-red-300 text-red-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md z-50">
-          <AlertCircle size={20} />
-          <div className="text-sm">{error}</div>
-          <button onClick={() => setError(null)} className="text-red-800 hover:text-red-950 font-bold">&times;</button>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-md flex items-center gap-3 max-w-md z-50">
+          <AlertCircle size={18} />
+          <div className="text-sm font-medium">{error}</div>
+          <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 font-bold text-lg leading-none">&times;</button>
         </div>
       )}
 
       {/* Settings Modal */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Settings size={24} className="text-slate-700" />
-              設定
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2 text-gray-900">
+              <Settings size={20} className="text-gray-700" />
+              API設定
             </h2>
-            <p className="text-sm text-slate-600 mb-4">
-              リアルタイム翻訳とトークン数カウント機能を有効にするには、Google Gemini API キーを入力してください。
-              キーはブラウザのローカルストレージに保存されます。
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              リアルタイム翻訳とトークン数カウント機能を有効にするには、Google Gemini API キーを入力してください。キーはブラウザのローカルストレージに保存されます。
             </p>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Gemini API Key</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">Gemini API Key</label>
                 <input 
                   type="password" 
                   placeholder="AIzaSy..." 
-                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
                   defaultValue={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                 />
               </div>
               
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-3">
                 {apiKey && (
                   <button 
                     onClick={() => setIsSettingsOpen(false)}
-                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium"
+                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
                   >
                     キャンセル
                   </button>
                 )}
                 <button 
                   onClick={() => handleSaveApiKey(apiKey)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
                 >
                   保存して開始
                 </button>
               </div>
               
-              <p className="text-xs text-slate-400 mt-4 text-center">
-                キーをお持ちでない場合は、Google AI Studio から取得できます。
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                キーをお持ちでない場合は <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a> から取得できます。
               </p>
             </div>
           </div>
@@ -327,34 +326,34 @@ const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIc
   return (
     <div className="flex flex-col h-full relative group">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-50/80 border-b border-slate-100">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50/50 to-white border-b border-blue-100">
         <div className="flex items-center gap-2">
           {langIcon}
-          <span className="font-medium text-slate-700">{title}</span>
+          <span className="font-medium text-gray-800 text-sm">{title}</span>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* Stats Badge: Tokens & Chars */}
-          <div className="flex items-center px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-500 font-mono shadow-sm">
-             <div className="flex items-center gap-1.5" title="Character Count">
-                <Type size={12} className="text-slate-400"/>
-                <span>{value.length.toLocaleString()}</span>
+          <div className="flex items-center px-2.5 py-1 bg-blue-50/80 border border-blue-200/60 rounded-md text-xs text-gray-700 font-mono">
+             <div className="flex items-center gap-1.5" title="文字数">
+                <Type size={11} className="text-blue-500"/>
+                <span className="font-medium">{value.length.toLocaleString()}</span>
              </div>
-             <div className="w-px h-3 bg-slate-200 mx-2"></div>
-             <div className="flex items-center gap-1.5" title="Estimated Token Count (Gemini Model)">
-                <Calculator size={12} className="text-slate-400"/>
-                <span>{tokenCount > 0 ? tokenCount.toLocaleString() : 0}</span>
+             <div className="w-px h-3 bg-blue-300 mx-2"></div>
+             <div className="flex items-center gap-1.5" title="推定トークン数 (Gemini)">
+                <Calculator size={11} className="text-blue-500"/>
+                <span className="font-medium">{tokenCount > 0 ? tokenCount.toLocaleString() : 0}</span>
              </div>
           </div>
 
           <button 
             onClick={handleCopy}
             disabled={!value}
-            className={`p-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium
-              ${copied ? 'bg-green-100 text-green-700' : 'hover:bg-slate-200 text-slate-500'}`}
+            className={`px-2.5 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium
+              ${copied ? 'bg-green-50 text-green-700 border border-green-200' : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-gray-600 border border-transparent disabled:opacity-40 disabled:cursor-not-allowed'}`}
           >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'コピー完了' : 'コピー'}
           </button>
         </div>
       </div>
@@ -365,14 +364,14 @@ const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIc
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className="w-full h-full p-6 resize-none outline-none text-slate-800 text-base leading-relaxed font-mono placeholder:text-slate-300"
+          className="w-full h-full p-5 resize-none outline-none text-gray-800 text-[15px] leading-relaxed font-mono placeholder:text-gray-400"
           spellCheck="false"
         />
         
         {/* Loading Overlay for this specific pane */}
         {isTranslating && (
           <div className="absolute top-4 right-4">
-             <Loader2 size={20} className="animate-spin text-blue-500/50" />
+             <Loader2 size={18} className="animate-spin text-blue-500/60" />
           </div>
         )}
       </div>
