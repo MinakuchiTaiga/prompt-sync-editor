@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User } from 'lucide-react';
 import logoImage from '/logo.png';
 import { setEncryptedItem, getEncryptedItem } from './crypto';
+import { sanitizeAIOutputWithCodeProtection, detectDangerousPatterns } from './sanitizer';
 
 // --- LLM Provider Configuration ---
 type LLMProvider = 'gemini' | 'openai' | 'claude';
@@ -494,7 +495,16 @@ CRITICAL RULES:
         throw new Error("翻訳結果が不正です。入力を確認してください。");
       }
       
-      return trimmedTranslation;
+      // Sanitize AI output to remove potential malicious code
+      const sanitizedOutput = sanitizeAIOutputWithCodeProtection(trimmedTranslation);
+      
+      // Detect and warn about dangerous patterns
+      const warnings = detectDangerousPatterns(trimmedTranslation);
+      if (warnings.length > 0) {
+        console.warn('⚠️ AIの出力に危険なパターンが検出され、無害化されました:', warnings);
+      }
+      
+      return sanitizedOutput;
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Translation failed');
