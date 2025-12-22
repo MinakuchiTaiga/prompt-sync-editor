@@ -79,6 +79,7 @@ const App = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isHowToUseOpen, setIsHowToUseOpen] = useState(false);
+  const [showApiKeyTooltip, setShowApiKeyTooltip] = useState(false);
   
   const [leftText, setLeftText] = useState(""); // Japanese (usually)
   const [rightText, setRightText] = useState(""); // English (usually)
@@ -131,13 +132,13 @@ const App = () => {
         
         setApiKeys({ gemini, openai, claude });
         
-        // APIキーがない場合は設定画面を開く
+        // APIキーがない場合はツールチップを表示
         if (!gemini && !openai && !claude) {
-          setIsSettingsOpen(true);
+          setShowApiKeyTooltip(true);
         }
       } catch (error) {
         console.error('APIキーの読み込みエラー:', error);
-        setIsSettingsOpen(true);
+        setShowApiKeyTooltip(true);
       }
     };
     
@@ -188,6 +189,7 @@ const App = () => {
       localStorage.setItem('llm_provider', llmProvider);
       
       setApiKeys(keys);
+      setShowApiKeyTooltip(false);
       setIsSettingsOpen(false);
     } catch (error) {
       console.error('APIキーの保存エラー:', error);
@@ -1139,13 +1141,45 @@ CRITICAL RULES:
           >
             <User size={18} />
           </button>
-          <button 
-            onClick={() => setIsSettingsOpen(true)}
-            className={`p-2 rounded-md transition-colors ${!apiKeys[llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
-            title={!apiKeys[llmProvider] ? `${llmProvider}のAPIキーが未設定です` : "API設定"}
-          >
-            <Settings size={18} />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setIsSettingsOpen(true);
+                setShowApiKeyTooltip(false);
+              }}
+              className={`p-2 rounded-md transition-colors ${!apiKeys[llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
+              title={!apiKeys[llmProvider] ? `${llmProvider}のAPIキーが未設定です` : "API設定"}
+            >
+              <Settings size={18} />
+            </button>
+            
+            {/* API Key Setup Tooltip */}
+            {showApiKeyTooltip && !apiKeys[llmProvider] && (
+              <div className="absolute top-full right-0 mt-2 w-64 bg-blue-500 text-white p-4 rounded-lg shadow-xl z-50 animate-in fade-in slide-in-from-top-2">
+                <button 
+                  onClick={() => setShowApiKeyTooltip(false)}
+                  className="absolute top-1 right-1 text-white/80 hover:text-white text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-white/20"
+                >
+                  &times;
+                </button>
+                <div className="pr-4">
+                  <div className="font-bold text-sm mb-1.5">🔑 APIキーを設定しましょう</div>
+                  <div className="text-xs text-white/90 leading-relaxed">
+                    翻訳機能を使用するには、まずAPIキーを設定してください。
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(true);
+                      setShowApiKeyTooltip(false);
+                    }}
+                    className="mt-3 w-full bg-white text-blue-600 font-medium text-sm py-1.5 px-3 rounded hover:bg-blue-50 transition-colors"
+                  >
+                    設定する
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
