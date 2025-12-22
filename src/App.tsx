@@ -1709,7 +1709,7 @@ const EditorPane = ({ title, value, onChange, placeholder, isTranslating, langIc
           <button 
             onClick={handleCopy}
             disabled={!value}
-            className={`px-2.5 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium
+            className={`px-2.5 py-1.5 rounded-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium cursor-pointer
               ${copied ? 'bg-green-50 text-green-700 border border-green-200' : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-gray-600 border border-transparent disabled:opacity-40 disabled:cursor-not-allowed'}`}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
