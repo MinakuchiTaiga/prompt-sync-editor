@@ -18,112 +18,107 @@ export const translateText = async (
     return undefined;
   }
 
-  try {
-    const sanitizedText = sanitizeInput(text);
-    const systemPrompt = SYSTEM_PROMPT_TEMPLATE(sourceLang, targetLang);
+  const sanitizedText = sanitizeInput(text);
+  const systemPrompt = SYSTEM_PROMPT_TEMPLATE(sourceLang, targetLang);
 
-    let translatedContent = "";
+  let translatedContent = "";
 
-    switch (llmProvider) {
-      case "gemini": {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODELS.gemini}:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: sanitizedText }] }],
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-            }),
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || "Translation failed");
+  switch (llmProvider) {
+    case "gemini": {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODELS.gemini}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: sanitizedText }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+          }),
         }
+      );
 
-        translatedContent =
-          data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        break;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Translation failed");
       }
 
-      case "openai": {
-        const response = await fetch(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: LLM_MODELS.openai,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: sanitizedText },
-              ],
-            }),
-          }
-        );
+      translatedContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      break;
+    }
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || "Translation failed");
-        }
-
-        translatedContent = data.choices?.[0]?.message?.content || "";
-        break;
-      }
-
-      case "claude": {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+    case "openai": {
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: LLM_MODELS.claude,
-            max_tokens: 4096,
-            system: systemPrompt,
-            messages: [{ role: "user", content: sanitizedText }],
+            model: LLM_MODELS.openai,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: sanitizedText },
+            ],
           }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || "Translation failed");
         }
-
-        translatedContent = data.content?.[0]?.text || "";
-        break;
-      }
-    }
-
-    const trimmedTranslation = translatedContent.trim();
-
-    if (!validateTranslation(sanitizedText, trimmedTranslation)) {
-      throw new Error("翻訳結果が不正です。入力を確認してください。");
-    }
-
-    const sanitizedOutput =
-      sanitizeAIOutputWithCodeProtection(trimmedTranslation);
-
-    const warnings = detectDangerousPatterns(trimmedTranslation);
-    if (warnings.length > 0) {
-      console.warn(
-        "⚠️ AIの出力に危険なパターンが検出され、無害化されました:",
-        warnings
       );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Translation failed");
+      }
+
+      translatedContent = data.choices?.[0]?.message?.content || "";
+      break;
     }
 
-    return sanitizedOutput;
-  } catch (err) {
-    throw err;
+    case "claude": {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: LLM_MODELS.claude,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: "user", content: sanitizedText }],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Translation failed");
+      }
+
+      translatedContent = data.content?.[0]?.text || "";
+      break;
+    }
   }
+
+  const trimmedTranslation = translatedContent.trim();
+
+  if (!validateTranslation(sanitizedText, trimmedTranslation)) {
+    throw new Error("翻訳結果が不正です。入力を確認してください。");
+  }
+
+  const sanitizedOutput =
+    sanitizeAIOutputWithCodeProtection(trimmedTranslation);
+
+  const warnings = detectDangerousPatterns(trimmedTranslation);
+  if (warnings.length > 0) {
+    console.warn(
+      "⚠️ AIの出力に危険なパターンが検出され、無害化されました:",
+      warnings
+    );
+  }
+
+  return sanitizedOutput;
 };
