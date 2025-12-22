@@ -1103,55 +1103,79 @@ CRITICAL RULES:
             </div>
           )}
           <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
-            <button 
-              onClick={handleUndo}
-              disabled={historyIndex <= 0}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              title="前に戻る"
-            >
-              <Undo2 size={18} />
-            </button>
-            <button 
-              onClick={handleRedo}
-              disabled={historyIndex >= history.length - 1}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              title="次に進む"
-            >
-              <Redo2 size={18} />
-            </button>
+            <div className="relative group">
+              <button 
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer"
+              >
+                <Undo2 size={18} />
+              </button>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+                前に戻る
+              </div>
+            </div>
+            <div className="relative group">
+              <button 
+                onClick={handleRedo}
+                disabled={historyIndex >= history.length - 1}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer"
+              >
+                <Redo2 size={18} />
+              </button>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+                次に進む
+              </div>
+            </div>
           </div>
-          <button 
-            onClick={handleClear}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-            title="クリア"
-          >
-            <Eraser size={18} />
-          </button>
-          <button 
-            onClick={() => setIsHowToUseOpen(true)}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-            title="使い方"
-          >
-            <BookOpen size={18} />
-          </button>
-          <button 
-            onClick={() => setIsUserSettingsOpen(true)}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-            title="ユーザー設定"
-          >
-            <User size={18} />
-          </button>
-          <div className="relative">
+          <div className="relative group">
             <button 
-              onClick={() => {
-                setIsSettingsOpen(true);
-                setShowApiKeyTooltip(false);
-              }}
-              className={`p-2 rounded-md transition-colors ${!apiKeys[llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
-              title={!apiKeys[llmProvider] ? `${llmProvider}のAPIキーが未設定です` : "API設定"}
+              onClick={handleClear}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
             >
-              <Settings size={18} />
+              <Eraser size={18} />
             </button>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+              クリア
+            </div>
+          </div>
+          <div className="relative group">
+            <button 
+              onClick={() => setIsHowToUseOpen(true)}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+            >
+              <BookOpen size={18} />
+            </button>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+              使い方
+            </div>
+          </div>
+          <div className="relative group">
+            <button 
+              onClick={() => setIsUserSettingsOpen(true)}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+            >
+              <User size={18} />
+            </button>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+              ユーザー設定
+            </div>
+          </div>
+          <div className="relative">
+            <div className="group">
+              <button 
+                onClick={() => {
+                  setIsSettingsOpen(true);
+                  setShowApiKeyTooltip(false);
+                }}
+                className={`p-2 rounded-md transition-colors cursor-pointer ${!apiKeys[llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
+              >
+                <Settings size={18} />
+              </button>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1.5 bg-blue-50 text-gray-700 text-xs font-medium rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md border border-blue-100 z-[60]">
+                API設定
+              </div>
+            </div>
             
             {/* API Key Setup Tooltip */}
             {showApiKeyTooltip && !apiKeys[llmProvider] && (
