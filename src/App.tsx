@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User } from 'lucide-react';
+import { Settings, Copy, Check, AlertCircle, Eraser, Loader2, Calculator, Type, Undo2, Redo2, User, BookOpen } from 'lucide-react';
 import logoImage from '/logo.png';
 import { setEncryptedItem, getEncryptedItem, setEncryptedSessionItem, getEncryptedSessionItem } from './crypto';
 import { sanitizeAIOutputWithCodeProtection, detectDangerousPatterns } from './sanitizer';
@@ -78,6 +78,7 @@ const App = () => {
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
+  const [isHowToUseOpen, setIsHowToUseOpen] = useState(false);
   
   const [leftText, setLeftText] = useState(""); // Japanese (usually)
   const [rightText, setRightText] = useState(""); // English (usually)
@@ -1125,6 +1126,13 @@ CRITICAL RULES:
             <Eraser size={18} />
           </button>
           <button 
+            onClick={() => setIsHowToUseOpen(true)}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            title="使い方"
+          >
+            <BookOpen size={18} />
+          </button>
+          <button 
             onClick={() => setIsUserSettingsOpen(true)}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
             title="ユーザー設定"
@@ -1182,6 +1190,148 @@ CRITICAL RULES:
           <AlertCircle size={18} />
           <div className="text-sm font-medium">{error}</div>
           <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800 font-bold text-lg leading-none">&times;</button>
+        </div>
+      )}
+
+      {/* How to Use Modal */}
+      {isHowToUseOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+              <BookOpen size={24} className="text-blue-600" />
+              JpEn - 使い方
+            </h2>
+            
+            <div className="space-y-5 text-sm text-gray-700 leading-relaxed">
+              <section>
+                <h3 className="font-bold text-base text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">📝</span> 概要
+                </h3>
+                <p>
+                  JpEnは、日本語と英語を双方向でリアルタイム翻訳するエディタです。
+                  日本語でプロンプトを考えながら、自動的に英語版を生成できるため、
+                  AIチャットでのトークン節約に最適です。
+                </p>
+              </section>
+
+              <section className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm font-semibold text-amber-900">
+                  ⚙️ 最初に、画面右上の <strong><Settings size={14} className="inline" /> API設定</strong> からAPIキーを設定してください。
+                </p>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-base text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">⚡</span> 基本的な使い方
+                </h3>
+                <ul className="space-y-2 list-disc list-inside ml-2">
+                  <li>
+                    <strong>左側（日本語）</strong>に入力すると、右側に英語訳が自動表示されます
+                  </li>
+                  <li>
+                    <strong>右側（英語）</strong>に入力すると、左側に日本語訳が自動表示されます
+                  </li>
+                  <li>
+                    編集を停止してから{(userSettings.translationDelay / 1000).toFixed(1)}秒後に自動翻訳が開始されます
+                  </li>
+                  <li>
+                    変更された部分だけが翻訳され、緑色にハイライトされます
+                  </li>
+                  <li>
+                    削除された行は赤色にハイライトされ、1秒後に反対側からも削除されます
+                  </li>
+                </ul>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-base text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">🔧</span> 機能説明
+                </h3>
+                <ul className="space-y-2 list-disc list-inside ml-2">
+                  <li>
+                    <strong><Undo2 size={14} className="inline" /> 前に戻る / <Redo2 size={14} className="inline" /> 次に進む</strong>：
+                    編集履歴を最大50ステップまで保存し、元に戻したりやり直したりできます
+                  </li>
+                  <li>
+                    <strong><Eraser size={14} className="inline" /> クリア</strong>：
+                    両側のテキストと履歴をすべてクリアします
+                  </li>
+                  <li>
+                    <strong><BookOpen size={14} className="inline" /> 使い方</strong>：
+                    このヘルプモーダルを表示します
+                  </li>
+                  <li>
+                    <strong><User size={14} className="inline" /> ユーザー設定</strong>：
+                    自動翻訳のON/OFFや翻訳遅延時間を変更できます
+                  </li>
+                  <li>
+                    <strong><Settings size={14} className="inline" /> API設定</strong>：
+                    使用するLLMプロバイダー（Gemini / OpenAI / Claude）とAPIキーを設定します
+                  </li>
+                  <li>
+                    <strong><Copy size={14} className="inline" /> コピー</strong>：
+                    各エディタのテキストをクリップボードにコピーします
+                  </li>
+                  <li>
+                    <strong><Calculator size={14} className="inline" /> トークン数</strong>：
+                    各エディタのテキストの推定トークン数を表示します（LLMへのコスト見積もりに便利）
+                  </li>
+                </ul>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-base text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">💰</span> トークン節約のメリット
+                </h3>
+                <p>
+                  日本語は英語に比べて約2倍のトークン数を消費します。
+                  このツールを使うことで、日本語で考えながら効率的な英語プロンプトを作成でき、
+                  <strong>AIへのAPI呼び出しコストを大幅に削減</strong>できます。
+                </p>
+              </section>
+
+              <section>
+                <h3 className="font-bold text-base text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">🔒</span> セキュリティとプライバシー
+                </h3>
+                <ul className="space-y-2 list-disc list-inside ml-2">
+                  <li>
+                    <strong>APIキーの保存方法：</strong>API設定画面で「入力内容を次回以降も保存する」のON/OFFを切り替えられます
+                  </li>
+                  <li>
+                    <strong>ONの場合：</strong>APIキーはローカルストレージに暗号化して保存され、ブラウザを閉じても保持されます
+                  </li>
+                  <li>
+                    <strong>OFFの場合：</strong>APIキーはセッションストレージに暗号化して保存され、タブを閉じると自動的に削除されます
+                  </li>
+                  <li>
+                    翻訳には選択したLLMプロバイダー（Gemini / OpenAI / Claude）のAPIを使用します
+                  </li>
+                  <li>
+                    入力されたテキストは、翻訳のために選択したLLMプロバイダーに送信されます
+                  </li>
+                </ul>
+              </section>
+
+              <section className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-bold text-base text-gray-900 mb-2">💡 ヒント</h3>
+                <ul className="space-y-1 list-disc list-inside ml-2 text-xs">
+                  <li>自動翻訳をOFFにして、手動で翻訳タイミングをコントロールできます</li>
+                  <li>プロンプトの構文（{'{{'}変数{'}}'} や [プレースホルダー] など）は自動的に保持されます</li>
+                  <li>行の追加・削除は視覚的にハイライトされるため、変更箇所を把握しやすくなっています</li>
+                </ul>
+              </section>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button 
+                onClick={() => setIsHowToUseOpen(false)}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
