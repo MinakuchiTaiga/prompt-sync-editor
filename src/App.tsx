@@ -23,7 +23,6 @@ const LLM_LABELS = {
 interface UserSettings {
   autoTranslate: boolean;
   translationDelay: number; // in milliseconds
-  llmProvider: LLMProvider;
 }
 
 // History state interface
@@ -42,6 +41,12 @@ const App = () => {
     claude: ''
   });
   
+  // LLM Provider selection (moved from User Settings)
+  const [llmProvider, setLlmProvider] = useState<LLMProvider>(() => {
+    const saved = localStorage.getItem('llm_provider');
+    return (saved as LLMProvider) || 'gemini';
+  });
+  
   // APIキーを永続保存するかどうか（falseの場合はsessionStorage）
   const [saveToLocalStorage, setSaveToLocalStorage] = useState(() => {
     // localStorageに保存されている場合はtrue
@@ -53,8 +58,7 @@ const App = () => {
     const saved = localStorage.getItem('user_settings');
     const defaultSettings: UserSettings = {
       autoTranslate: true,
-      translationDelay: 1000,
-      llmProvider: 'gemini' as LLMProvider
+      translationDelay: 1000
     };
     
     if (saved) {
@@ -150,7 +154,7 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [rightText, userSettings.translationDelay]);
 
-  // Save API Keys (with encryption)
+  // Save API Keys (with encryption) and LLM Provider
   const handleSaveApiKeys = async (keys: { gemini: string; openai: string; claude: string }) => {
     try {
       if (saveToLocalStorage) {
@@ -179,6 +183,9 @@ const App = () => {
         localStorage.setItem('api_keys_persist', 'false');
       }
       
+      // Save llmProvider to localStorage
+      localStorage.setItem('llm_provider', llmProvider);
+      
       setApiKeys(keys);
       setIsSettingsOpen(false);
     } catch (error) {
@@ -198,11 +205,11 @@ const App = () => {
   const fetchTokenCount = async (text: string) => {
     if (!text || !text.trim()) return 0;
     
-    const apiKey = apiKeys[userSettings.llmProvider];
+    const apiKey = apiKeys[llmProvider];
     if (!apiKey) return 0;
 
     try {
-      switch (userSettings.llmProvider) {
+      switch (llmProvider) {
         case 'gemini': {
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODELS.gemini}:countTokens?key=${apiKey}`,
@@ -414,7 +421,7 @@ const App = () => {
 
   // Translation Function
   const translateText = async (text: string, sourceLang: string, targetLang: string) => {
-    const apiKey = apiKeys[userSettings.llmProvider];
+    const apiKey = apiKeys[llmProvider];
     if (!text.trim() || !apiKey) {
       return undefined;
     }
@@ -439,7 +446,7 @@ CRITICAL RULES:
 
       let translatedContent = '';
 
-      switch (userSettings.llmProvider) {
+      switch (llmProvider) {
         case 'gemini': {
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODELS.gemini}:generateContent?key=${apiKey}`,
@@ -686,7 +693,7 @@ CRITICAL RULES:
         setLeftTokenCount(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedLeft, userSettings.llmProvider]);
+  }, [debouncedLeft, llmProvider]);
 
   // Effect: Trigger translation when RIGHT (English) changes consistently
   useEffect(() => {
@@ -801,7 +808,7 @@ CRITICAL RULES:
         setRightTokenCount(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedRight, userSettings.llmProvider]);
+  }, [debouncedRight, llmProvider]);
 
   // Undo/Redo handlers
   const handleUndo = () => {
@@ -859,7 +866,7 @@ CRITICAL RULES:
 
   // Manual translation handlers
   const handleManualTranslateLeft = async () => {
-    const apiKey = apiKeys[userSettings.llmProvider];
+    const apiKey = apiKeys[llmProvider];
     if (!leftText || !apiKey) return;
     
     // Check if this is the first translation or a diff update
@@ -964,7 +971,7 @@ CRITICAL RULES:
   };
 
   const handleManualTranslateRight = async () => {
-    const apiKey = apiKeys[userSettings.llmProvider];
+    const apiKey = apiKeys[llmProvider];
     if (!rightText || !apiKey) return;
     
     // Check if this is the first translation or a diff update
@@ -1126,8 +1133,8 @@ CRITICAL RULES:
           </button>
           <button 
             onClick={() => setIsSettingsOpen(true)}
-            className={`p-2 rounded-md transition-colors ${!apiKeys[userSettings.llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
-            title={!apiKeys[userSettings.llmProvider] ? `${userSettings.llmProvider}のAPIキーが未設定です` : "API設定"}
+            className={`p-2 rounded-md transition-colors ${!apiKeys[llmProvider] ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-500 hover:bg-gray-100'}`}
+            title={!apiKeys[llmProvider] ? `${llmProvider}のAPIキーが未設定です` : "API設定"}
           >
             <Settings size={18} />
           </button>
@@ -1191,24 +1198,6 @@ CRITICAL RULES:
             </p>
             
             <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  翻訳LLM
-                </label>
-                <select
-                  value={userSettings.llmProvider}
-                  onChange={(e) => setUserSettings({ ...userSettings, llmProvider: e.target.value as LLMProvider })}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
-                >
-                  <option value="gemini">{LLM_LABELS.gemini} (Gemini 2.5 Flash Lite)</option>
-                  <option value="openai">{LLM_LABELS.openai} (GPT-5 Nano)</option>
-                  <option value="claude">{LLM_LABELS.claude} (Haiku 4.5)</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-2">
-                  選択したプロバイダーのAPIキーが必要です（API設定から入力）
-                </p>
-              </div>
-              
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-gray-700">自動翻訳</span>
@@ -1282,51 +1271,78 @@ CRITICAL RULES:
               API設定
             </h2>
             <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-              使用するLLMプロバイダーのAPIキーを入力してください。保存方法を選択できます。
+              使用するLLMプロバイダーを選択し、APIキーを入力してください。
             </p>
             
             <div className="space-y-4">
               <div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
-                  Google Gemini API Key
-                  {userSettings.llmProvider === 'gemini' && <span className="text-blue-600 text-xs">(選択中)</span>}
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  翻訳LLM
                 </label>
-                <input 
-                  type="password" 
-                  placeholder="AIzaSy..." 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
-                  value={apiKeys.gemini}
-                  onChange={(e) => setApiKeys({ ...apiKeys, gemini: e.target.value })}
-                />
+                <select
+                  value={llmProvider}
+                  onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
+                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
+                >
+                  <option value="gemini">{LLM_LABELS.gemini} (Gemini 2.5 Flash Lite)</option>
+                  <option value="openai">{LLM_LABELS.openai} (GPT-5 Nano)</option>
+                  <option value="claude">{LLM_LABELS.claude} (Haiku 4.5)</option>
+                </select>
               </div>
               
-              <div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
-                  OpenAI API Key
-                  {userSettings.llmProvider === 'openai' && <span className="text-blue-600 text-xs">(選択中)</span>}
-                </label>
-                <input 
-                  type="password" 
-                  placeholder="sk-proj-..." 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
-                  value={apiKeys.openai}
-                  onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
-                />
-              </div>
+              {llmProvider === 'gemini' && (
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
+                    Google Gemini API Key
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="AIzaSy..." 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
+                    value={apiKeys.gemini}
+                    onChange={(e) => setApiKeys({ ...apiKeys, gemini: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    APIキーの取得は <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a> から行えます。
+                  </p>
+                </div>
+              )}
               
-              <div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
-                  Anthropic Claude API Key
-                  {userSettings.llmProvider === 'claude' && <span className="text-blue-600 text-xs">(選択中)</span>}
-                </label>
-                <input 
-                  type="password" 
-                  placeholder="sk-ant-..." 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
-                  value={apiKeys.claude}
-                  onChange={(e) => setApiKeys({ ...apiKeys, claude: e.target.value })}
-                />
-              </div>
+              {llmProvider === 'openai' && (
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
+                    OpenAI API Key
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="sk-proj-..." 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
+                    value={apiKeys.openai}
+                    onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    APIキーの取得は <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI Platform</a> から行えます。
+                  </p>
+                </div>
+              )}
+              
+              {llmProvider === 'claude' && (
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
+                    Anthropic Claude API Key
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="sk-ant-..." 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm transition-all"
+                    value={apiKeys.claude}
+                    onChange={(e) => setApiKeys({ ...apiKeys, claude: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    APIキーの取得は <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Anthropic Console</a> から行えます。
+                  </p>
+                </div>
+              )}
               
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex items-center justify-between">
@@ -1367,12 +1383,6 @@ CRITICAL RULES:
                 >
                   保存
                 </button>
-              </div>
-              
-              <div className="text-xs text-gray-500 mt-4 space-y-1">
-                <p><strong>Gemini:</strong> <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a></p>
-                <p><strong>OpenAI:</strong> <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI Platform</a></p>
-                <p><strong>Claude:</strong> <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Anthropic Console</a></p>
               </div>
               
               <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
